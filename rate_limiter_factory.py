@@ -1,6 +1,6 @@
 from rateLimitingAlgo.tokenBucket import TokenBucket
 from rateLimitingAlgo.leakyBucket import LeakyBucket
-from rateLimitConfig import RateLimitRule
+from rate_limit_config import RateLimitRule
 
 class RateLimiterFactory:
     """
@@ -11,8 +11,8 @@ class RateLimiterFactory:
     def __init__(self):
         self._cache = {}
 
-    def get_algorithm(self, rule: RateLimitRule):
-        cache_key = (rule.algorithm, rule.capacity, rule.refill_rate)
+    def get_algorithm(self, identifier, rule: RateLimitRule):
+        cache_key = (identifier, rule.algorithm, rule.capacity, rule.refill_rate)
 
         if cache_key in self._cache:
             return self._cache[cache_key]

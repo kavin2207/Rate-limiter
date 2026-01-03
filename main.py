@@ -1,20 +1,25 @@
 import time
 from limiter import Limiter
-from rateLimitingAlgo.leakyBucket import LeakyBucket
-from rateLimitingAlgo.tokenBucket import TokenBucket
+from rate_limit_config import RateLimitConfig
+from rate_limiter_factory import RateLimiterFactory
+from rate_limit_key_builder import RateLimiterBuilder
 
-using_algo = "TokenBucket"
+rate_limit_config = RateLimitConfig()
+rate_limiter_factor = RateLimiterFactory()
+rate_limiter_key_builder = RateLimiterBuilder()
 
-if using_algo == "TokenBucket":
-    algorithm = TokenBucket(capacity=10, refill_rate=2)
-else:
-    algorithm = LeakyBucket(capacity=10,leak_rate=1)
+request = {
+  "user_id": "123",
+  "api_key": "abc",
+  "ip": "10.0.0.1",
+  "endpoint": "/orders",
+  "method": "POST",
+  "metadata": {}
+}
 
-limiter = Limiter(algorithm)
+limiter = Limiter(rate_limiter_key_builder, rate_limit_config, rate_limiter_factor)
 
-identifier = "abhijeet"
-
-for _ in range(20):
-    allowed, reason = limiter.process_request(identifier, time.time())
-    time.sleep(1)
-    print(allowed, reason)
+for _ in range(2):
+    allowed = limiter.allow_request(request)
+    time.sleep(0.5)
+    print(allowed)

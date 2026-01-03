@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Dict
 
 class RateLimitingAlgorithm(ABC):
     @abstractmethod
-    def allow_request(self, identifier, time_stamp)->Tuple[bool, str]:
+    def evaluate(self, identifier, time_stamp)->Dict:
         pass
