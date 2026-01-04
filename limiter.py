@@ -10,6 +10,8 @@ import time
 from rate_limit_config import RateLimitConfig
 from rate_limiter_factory import RateLimiterFactory
 from rate_limit_key_builder import RateLimiterBuilder
+from rateLimitingAlgo.rate_limiter_decision import RateLimitDecision
+import logging
 
 class Limiter:
     def __init__(self, identifier_builder: RateLimiterBuilder, config: RateLimitConfig, factory: RateLimiterFactory, clock=time.time):
@@ -19,20 +21,30 @@ class Limiter:
         self.clock = clock
 
     def allow_request(self, request: dict):
-        success, identifier = self.identifier_builder.key_builder(request)
-        if not success:
-            return "InValid Request"
+        id_result = self.identifier_builder.key_builder(request)
+        logging.info("id _result %s",id_result)
 
-        principle_type, principal, endpoint, method = identifier.split(":")
+        if not id_result.success:
+            return RateLimitDecision(
+                allowed=False,
+                limit=0,
+                remaining=0,
+                retry_after=None,
+                error_code=id_result.error_code,
+                error_message=id_result.error_message
+            )
+
+        principle_type, principal, endpoint, method = id_result.key.split(":")
 
         rule = self.config.resolve_rule(
             principal=principal,
             endpoint=endpoint,
             method=method
         )
+        logging.info("RULE: %s", rule)
 
-        algorithm = self.factory.get_algorithm(identifier, rule)
-        decision = algorithm.evaluate(identifier, self.clock())
+        algorithm = self.factory.get_algorithm(id_result.key, rule)
+        decision = algorithm.evaluate(id_result.key, self.clock())
         return decision
 
 
