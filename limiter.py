@@ -1,28 +1,30 @@
-"""
-    This is the domain controller of this project request go through this controller this will decide weather to accept the request or not
-    this is going to call the actual algo for rateLimiter and based on that make a decision.
-
-    Input: Identifier: str
-    Output: tuple, contain (boolean,string)
-"""
-
 import time
-from rate_limit_config import RateLimitConfig
+import logging
+from storage.in_memory import InMemoryStorage
 from rate_limiter_factory import RateLimiterFactory
+from rate_limit_config import RateLimitConfig
 from rate_limit_key_builder import RateLimiterBuilder
 from rateLimitingAlgo.rate_limiter_decision import RateLimitDecision
+import os
 import logging
+logging.getLogger("rl").info(f"PID={os.getpid()}")
+
 
 class Limiter:
-    def __init__(self, identifier_builder: RateLimiterBuilder, config: RateLimitConfig, factory: RateLimiterFactory, clock=time.time):
+    def __init__(self, identifier_builder: RateLimiterBuilder,
+                 config: RateLimitConfig,
+                 clock=time.time):
+
         self.identifier_builder = identifier_builder
         self.config = config
-        self.factory = factory
         self.clock = clock
 
+        self.storage = InMemoryStorage()
+        self.factory = RateLimiterFactory(self.storage)
+
     def allow_request(self, request: dict):
+        logging.info("Handling request in PID=%s", os.getpid())
         id_result = self.identifier_builder.key_builder(request)
-        logging.info("id _result %s",id_result)
 
         if not id_result.success:
             return RateLimitDecision(
@@ -34,17 +36,12 @@ class Limiter:
                 error_message=id_result.error_message
             )
 
-        principle_type, principal, endpoint, method = id_result.key.split(":")
+        _, principal, endpoint, method = id_result.key.split(":")
 
         rule = self.config.resolve_rule(
             principal=principal,
             endpoint=endpoint,
-            method=method
-        )
-        logging.info("RULE: %s", rule)
+            method=method)
+        algorithm = self.factory.get_algorithm(rule)
 
-        algorithm = self.factory.get_algorithm(id_result.key, rule)
-        decision = algorithm.evaluate(id_result.key, self.clock())
-        return decision
-
-
+        return algorithm.evaluate(id_result.key, self.clock())

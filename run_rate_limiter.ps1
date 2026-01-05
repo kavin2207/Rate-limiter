@@ -8,7 +8,7 @@ Start-Sleep -Seconds 2
 
 Write-Host "Sending requests..."
 
-for ($i = 1; $i -le 20; $i++) {
+for ($i = 1; $i -le 30; $i++) {
     Write-Host "Request $i"
     $response = curl -Method POST http://localhost:8000/orders -Headers @{"X-User-Id"="123"} -UseBasicParsing -ErrorAction SilentlyContinue
     $response.Headers

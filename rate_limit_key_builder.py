@@ -42,7 +42,6 @@ class RateLimiterBuilder:
             method=request.method,          # ✅ STRING
             metadata=None
         )
-        logging.info("request %s ",request)
         if request.user_id is not None:
             key = f"user:{request.user_id}:{request.endpoint}:{request.method.upper()}"
             return IdentifierResult(success=True,key=key)

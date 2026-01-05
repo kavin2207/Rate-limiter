@@ -1,44 +1,61 @@
 from typing import Dict, Tuple
 from rateLimitingAlgo.rate_limiter_decision import RateLimitDecision
+from storage.base import RateLimitStorage
+from rate_limit_config import RateLimitConfig
+import logging
 
 class LeakyBucket:
-    def __init__(self, capacity, leak_rate):
-        self.capacity = capacity  # max bucket size
-        self.leak_rate = leak_rate  # rate at which water leaks per second
-        self.bucket: Dict[str,Tuple[float,float]] = {}
+    def __init__(self, storage: RateLimitStorage, config: RateLimitConfig):
+        self.capacity = config.capacity  # max bucket size
+        self.leak_rate = config.refill_rate  # rate at which water leaks per second
+        self.storage= storage
 
     def _leak(self, identifier: str, current_time: float):
-        if identifier not in self.bucket:
-            self.bucket[identifier] = (0,current_time)
-            return
-        water, last_time = self.bucket[identifier]
+        state = self.storage.get(identifier)
 
-        # Refill is second-granularity to ensure deterministic behavior
-        elapsed_time = current_time - last_time
-        new_water = max(0, water - elapsed_time * self.leak_rate)
-        
-        self.bucket[identifier] = (new_water, current_time)
+        if not state:
+            water = 0
+            last_time = current_time
+        else:
+            water = state["water"]
+            last_time = state["last_time"]
 
-    def allow_request(self, identifier, current_time):
-        self._leak(identifier, current_time)
-        water, last_time = self.bucket[identifier]
+            elapsed = current_time - last_time
+            if elapsed > 0:
+                water = max(0, water - elapsed * self.leak_rate)
+                last_time = current_time
+
+        self.storage.set(identifier, {
+            "water": water,
+            "last_time": last_time
+        })
+
+        return water, last_time
+
+    def allow_request(self, identifier: str, current_time: float):
+        water, last_time = self._leak(identifier, current_time)
+
         if water < self.capacity:
-            water += 1  # Add 1 unit of "water" for each request
-            self.bucket[identifier] = (water, last_time)
-            return True
-        return False
-    
+            water += 1
+            self.storage.set(identifier, {
+                "water": water,
+                "last_time": last_time
+            })
+            return True, water
+
+        return False, water
+
     def evaluate(self, identifier, current_time):
-        resp = self.allow_request(identifier, current_time)
-        water, last_refill_time = self.bucket[identifier]
-        if resp:
+        allowed, water = self.allow_request(identifier, current_time)
+        
+        if allowed:
             retry_after = None
         else:
             excess = water - self.capacity
             retry_after = excess / self.leak_rate
 
         result = RateLimitDecision(
-            allowed=resp,
+            allowed=allowed,
             limit=self.capacity,
             remaining=max(0, self.capacity - water),
             retry_after=retry_after

@@ -12,10 +12,8 @@ def rate_limit_dependency(limiter: Limiter):
     """
 
     def dependency(request: Request):
-        logging.info("DEPENDENCY HIT")
 
         decision = limiter.allow_request(request)
-        logging.info("Decision: %s", decision)
 
         # Make decision available to downstream handlers
         request.state.rate_limit_decision = decision
