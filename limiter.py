@@ -20,7 +20,7 @@ class Limiter:
         self.clock = clock
 
         self.storage = InMemoryStorage()
-        self.factory = RateLimiterFactory(self.storage)
+        self.factory = RateLimiterFactory()
 
     def allow_request(self, request: dict):
         logging.info("Handling request in PID=%s", os.getpid())
