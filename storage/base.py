@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+
 
 class RateLimitStorage(ABC):
 
     @abstractmethod
-    def get(self, key: str) -> Optional[Any]:
+    def token_bucket_allow(self, key, capacity, refill_rate, now):
         pass
 
     @abstractmethod
-    def set(self, key: str, value: Any, ttl: Optional[int] = None):
+    def leaky_bucket_allow(self, key, capacity, leak_rate, now):
         pass

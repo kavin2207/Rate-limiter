@@ -1,66 +1,41 @@
-from typing import Dict, Tuple
 from rateLimitingAlgo.rate_limiter_decision import RateLimitDecision
 from storage.base import RateLimitStorage
-from rate_limit_config import RateLimitConfig
+from rate_limit_config import RateLimitRule
+
 
 class TokenBucket:
-    def __init__(self, storage: RateLimitStorage, config: RateLimitConfig):
-        self.capacity = config.capacity
-        self.refill_rate = config.refill_rate
+    """
+    Distributed Token Bucket using Redis + Lua (atomic).
+    """
+
+    def __init__(self, storage: RateLimitStorage, rule: RateLimitRule):
         self.storage = storage
+        self.capacity = rule.capacity
+        self.refill_rate = rule.refill_rate
 
-    def _refill(self, identifier, current_time):
-        state = self.storage.get(identifier)
-
-        if not state:
-            tokens = self.capacity
-            last_refill_time = current_time
-        else:
-            tokens = state["tokens"]
-            last_refill_time = state["last_refill"]
-
-            elapsed = current_time - last_refill_time
-            if elapsed > 0:
-                tokens = min(
-                    self.capacity,
-                    tokens + elapsed * self.refill_rate
-                )
-                last_refill_time = current_time
-
-        self.storage.set(identifier, {
-            "tokens": tokens,
-            "last_refill": last_refill_time
-        })
-
-        return tokens, last_refill_time
-
-
-    def allow_request(self, identifier: str, current_time: float):
-        tokens, last_refill_time = self._refill(identifier, current_time)
-
-        allowed = False
-        if tokens >= 1:
-            tokens -= 1
-            allowed = True
-
-        self.storage.set(identifier, {
-            "tokens": tokens,
-            "last_refill": last_refill_time
-        })
-
-        return allowed, tokens
-
-
-    def evaluate(self, identifier, current_time):
-        allowed, tokens = self.allow_request(identifier, current_time)
-
-        retry_after = None if allowed else max(
-            0, (1 - tokens) / self.refill_rate
+    def evaluate(self, identifier: str, current_time: float) -> RateLimitDecision:
+        allowed, tokens = self.storage.token_bucket_allow(
+            key=identifier,
+            capacity=self.capacity,
+            refill_rate=self.refill_rate,
+            now=current_time,
         )
 
+        remaining = max(0, int(tokens))
+
+        if allowed:
+            return RateLimitDecision(
+                allowed=True,
+                limit=self.capacity,
+                remaining=remaining,
+                retry_after=None,
+            )
+
+        retry_after = 1 / self.refill_rate
+
         return RateLimitDecision(
-            allowed=allowed,
+            allowed=False,
             limit=self.capacity,
-            remaining=tokens,
-            retry_after=retry_after
+            remaining=remaining,
+            retry_after=retry_after,
         )
